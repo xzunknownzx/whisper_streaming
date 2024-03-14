@@ -3,7 +3,6 @@ import argparse
 import io
 import logging
 import socket
-import sys
 import time
 
 import librosa
@@ -36,7 +35,6 @@ model_size = args.model_size
 t = time.time()
 print(
     f"Loading Whisper {model_size} model...",
-    file=sys.stderr,
     end=" ",
     flush=True,
 )
@@ -49,7 +47,7 @@ asr = FasterWhisperASR(
 )
 
 e = time.time()
-print(f"done. It took {round(e-t,2)} seconds.", file=sys.stderr)
+print(f"done. It took {round(e-t,2)} seconds.")
 
 
 min_chunk = args.min_chunk_size
@@ -141,10 +139,10 @@ class ServerProcessor:
                 beg = max(beg, self.last_end)
 
             self.last_end = end
-            print("%1.0f %1.0f %s" % (beg, end, o[2]), flush=True, file=sys.stderr)
+            print("%1.0f %1.0f %s" % (beg, end, o[2]), flush=True)
             return "%1.0f %1.0f %s" % (beg, end, o[2])
         else:
-            print(o, file=sys.stderr, flush=True)
+            print(o, flush=True)
             return None
 
     def send_result(self, o):
@@ -158,14 +156,14 @@ class ServerProcessor:
         while True:
             a = self.receive_audio_chunk()
             if a is None:
-                print("break here", file=sys.stderr)
+                print("break here")
                 break
             self.online_asr_proc.insert_audio_chunk(a)
             o = online.process_iter()
             try:
                 self.send_result(o)
             except BrokenPipeError:
-                print("broken pipe -- connection closed?", file=sys.stderr)
+                print("broken pipe -- connection closed?")
                 break
 
 

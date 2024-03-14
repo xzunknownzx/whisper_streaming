@@ -32,27 +32,22 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # reset to store stderr to different file stream, e.g. open(os.devnull,"w")
-    logfile = sys.stderr
-
     if args.offline and args.comp_unaware:
         print(
-            "No or one option from --offline and --comp_unaware are available, not both. Exiting.",
-            file=logfile,
+            "No or one option from --offline and --comp_unaware are available, not both. Exiting."
         )
         sys.exit(1)
 
     audio_path = args.audio_path
 
     duration = len(load_audio(audio_path)) / SAMPLING_RATE
-    print("Audio duration is: %2.2f seconds" % duration, file=logfile)
+    print("Audio duration is: %2.2f seconds" % duration)
 
     model_size = args.model_size
 
     t = time.time()
     print(
         f"Loading Whisper {model_size} model...",
-        file=logfile,
         end=" ",
         flush=True,
     )
@@ -62,14 +57,13 @@ if __name__ == "__main__":
         model_dir=args.model_dir,
     )
     e = time.time()
-    print(f"done. It took {round(e-t,2)} seconds.", file=logfile)
+    print(f"done. It took {round(e-t,2)} seconds.")
 
     min_chunk = args.min_chunk_size
     tokenizer = None
     online = OnlineASRProcessor(
         asr,
         tokenizer,
-        logfile=logfile,
         buffer_trimming=(args.buffer_trimming, args.buffer_trimming_sec),
     )
 
@@ -94,7 +88,6 @@ if __name__ == "__main__":
         if o[0] is not None:
             print(
                 "%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2]),
-                file=logfile,
                 flush=True,
             )
             print(
@@ -102,7 +95,7 @@ if __name__ == "__main__":
                 flush=True,
             )
         else:
-            print(o, file=logfile, flush=True)
+            print(o, flush=True)
 
     if args.offline:  ## offline mode processing (for testing/debugging)
         a = load_audio(audio_path)
@@ -110,7 +103,7 @@ if __name__ == "__main__":
         try:
             o = online.process_iter()
         except AssertionError:
-            print("assertion error", file=logfile)
+            print("assertion error")
             pass
         else:
             output_transcript(o)
@@ -123,12 +116,12 @@ if __name__ == "__main__":
             try:
                 o = online.process_iter()
             except AssertionError:
-                print("assertion error", file=logfile)
+                print("assertion error")
                 pass
             else:
                 output_transcript(o, now=end)
 
-            print(f"## last processed {end:.2f}s", file=logfile, flush=True)
+            print(f"## last processed {end:.2f}s", flush=True)
 
             if end >= duration:
                 break
@@ -155,14 +148,13 @@ if __name__ == "__main__":
             try:
                 o = online.process_iter()
             except AssertionError:
-                print("assertion error", file=logfile)
+                print("assertion error")
                 pass
             else:
                 output_transcript(o)
             now = time.time() - start
             print(
                 f"## last processed {end:.2f} s, now is {now:.2f}, the latency is {now-end:.2f}",
-                file=logfile,
                 flush=True,
             )
 

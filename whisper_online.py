@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import sys
 from enum import StrEnum
 from functools import lru_cache
 
@@ -54,10 +53,7 @@ class ASRBase:
         model_size=None,
         cache_dir=None,
         model_dir=None,
-        logfile=sys.stderr,
     ):
-        self.logfile = logfile
-
         self.language = language
 
         self.model = self.load_model(model_size, cache_dir, model_dir)
@@ -74,8 +70,7 @@ class FasterWhisperASR(ASRBase):
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
         if model_dir is not None:
             print(
-                f"Loading whisper model from model_dir {model_dir}. model_size and cache_dir parameters are not used.",
-                file=self.logfile,
+                f"Loading whisper model from model_dir {model_dir}. model_size and cache_dir parameters are not used."
             )
             model_size_or_path = model_dir
         elif model_size is not None:
@@ -121,15 +116,13 @@ class FasterWhisperASR(ASRBase):
 
 
 class HypothesisBuffer:
-    def __init__(self, logfile=sys.stderr):
+    def __init__(self):
         self.commited_in_buffer = []
         self.buffer = []
         self.new = []
 
         self.last_commited_time = 0
         self.last_commited_word = None
-
-        self.logfile = logfile
 
     def insert(self, new, offset):
         # compare self.commited_in_buffer and new. It inserts only the words in new that extend the commited_in_buffer, it means they are roughly behind last_commited_time and new in content
@@ -153,9 +146,9 @@ class HypothesisBuffer:
                         )
                         tail = " ".join(self.new[j - 1][2] for j in range(1, i + 1))
                         if c == tail:
-                            print("removing last", i, "words:", file=self.logfile)
+                            print("removing last", i, "words:")
                             for j in range(i):
-                                print("\t", self.new.pop(0), file=self.logfile)
+                                print("\t", self.new.pop(0))
                             break
 
     def flush(self):
@@ -190,18 +183,14 @@ class HypothesisBuffer:
 
 
 class OnlineASRProcessor:
-    def __init__(
-        self, asr, tokenizer=None, buffer_trimming=("segment", 15), logfile=sys.stderr
-    ):
+    def __init__(self, asr, tokenizer=None, buffer_trimming=("segment", 15)):
         """asr: WhisperASR object
         tokenizer: sentence tokenizer object for the target language. Must have a method *split* that behaves like the one of MosesTokenizer. It can be None, if "segment" buffer trimming option is used, then tokenizer is not used at all.
         ("segment", 15)
         buffer_trimming: a pair of (option, seconds), where option is either "sentence" or "segment", and seconds is a number. Buffer is trimmed if it is longer than "seconds" threshold. Default is the most recommended option.
-        logfile: where to store the log.
         """
         self.asr = asr
         self.tokenizer = tokenizer
-        self.logfile = logfile
 
         self.init()
 
@@ -212,7 +201,7 @@ class OnlineASRProcessor:
         self.audio_buffer = np.array([], dtype=np.float32)
         self.buffer_time_offset = 0
 
-        self.transcript_buffer = HypothesisBuffer(logfile=self.logfile)
+        self.transcript_buffer = HypothesisBuffer()
         self.commited = []
 
     def insert_audio_chunk(self, audio):
@@ -246,11 +235,10 @@ class OnlineASRProcessor:
         """
 
         prompt, non_prompt = self.prompt()
-        print("PROMPT:", prompt, file=self.logfile)
-        print("CONTEXT:", non_prompt, file=self.logfile)
+        print("PROMPT:", prompt)
+        print("CONTEXT:", non_prompt)
         print(
-            f"transcribing {len(self.audio_buffer)/SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}",
-            file=self.logfile,
+            f"transcribing {len(self.audio_buffer)/SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}"
         )
         res = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
 
@@ -260,11 +248,10 @@ class OnlineASRProcessor:
         self.transcript_buffer.insert(tsw, self.buffer_time_offset)
         o = self.transcript_buffer.flush()
         self.commited.extend(o)
-        print(">>>>COMPLETE NOW:", self.to_flush(o), file=self.logfile, flush=True)
+        print(">>>>COMPLETE NOW:", self.to_flush(o), flush=True)
         print(
             "INCOMPLETE:",
             self.to_flush(self.transcript_buffer.complete()),
-            file=self.logfile,
             flush=True,
         )
 
@@ -282,13 +269,10 @@ class OnlineASRProcessor:
             # while k>0 and self.commited[k][1] > l:
             #    k -= 1
             # t = self.commited[k][1]
-            print(f"chunking segment", file=self.logfile)
+            print(f"chunking segment")
             # self.chunk_at(t)
 
-        print(
-            f"len of buffer now: {len(self.audio_buffer)/SAMPLING_RATE:2.2f}",
-            file=self.logfile,
-        )
+        print(f"len of buffer now: {len(self.audio_buffer)/SAMPLING_RATE:2.2f}")
         return self.to_flush(o)
 
     def chunk_completed_segment(self, res):
@@ -305,12 +289,12 @@ class OnlineASRProcessor:
                 ends.pop(-1)
                 e = ends[-2] + self.buffer_time_offset
             if e <= t:
-                print(f"--- segment chunked at {e:2.2f}", file=self.logfile)
+                print(f"--- segment chunked at {e:2.2f}")
                 self.chunk_at(e)
             else:
-                print(f"--- last segment not within commited area", file=self.logfile)
+                print(f"--- last segment not within commited area")
         else:
-            print(f"--- not enough segments to chunk", file=self.logfile)
+            print(f"--- not enough segments to chunk")
 
     def chunk_at(self, time):
         """trims the hypothesis and audio buffer at "time" """
@@ -325,7 +309,7 @@ class OnlineASRProcessor:
         """
         o = self.transcript_buffer.complete()
         f = self.to_flush(o)
-        print("last, noncommited:", f, file=self.logfile)
+        print("last, noncommited:", f)
         return f
 
     def to_flush(
