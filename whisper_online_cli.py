@@ -160,3 +160,4 @@ if __name__ == "__main__":
 
     o = online_asr.finish()
     output_transcript(o, now=now)
+    print(o[2].strip())
