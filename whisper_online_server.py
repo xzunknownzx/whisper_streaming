@@ -32,11 +32,10 @@ args = parser.parse_args()
 # setting whisper object by args
 
 model_size = args.model_size
-language = args.lan
 
 t = time.time()
 print(
-    f"Loading Whisper {model_size} model for {language}...",
+    f"Loading Whisper {model_size} model...",
     file=sys.stderr,
     end=" ",
     flush=True,
@@ -45,23 +44,12 @@ print(
 
 asr = FasterWhisperASR(
     model_size=model_size,
-    lan=language,
     cache_dir=args.model_cache_dir,
     model_dir=args.model_dir,
 )
 
-if args.task == "translate":
-    asr.set_translate_task()
-    tgt_language = "en"
-else:
-    tgt_language = language
-
 e = time.time()
 print(f"done. It took {round(e-t,2)} seconds.", file=sys.stderr)
-
-if args.vad:
-    print("setting VAD filter", file=sys.stderr)
-    asr.use_vad()
 
 
 min_chunk = args.min_chunk_size

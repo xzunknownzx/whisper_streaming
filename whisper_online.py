@@ -10,6 +10,7 @@ from faster_whisper import WhisperModel
 SAMPLING_RATE = 16000
 DEVICE = "cpu"
 COMPUTE_TYPE = "int8"
+LANGUAGE = "en"
 
 
 class ModelSize(StrEnum):
@@ -48,25 +49,20 @@ class ASRBase:
     # "" for faster-whisper because it emits the spaces when neeeded)
 
     def __init__(
-        self, lan, model_size=None, cache_dir=None, model_dir=None, logfile=sys.stderr
+        self,
+        language: str = LANGUAGE,
+        model_size=None,
+        cache_dir=None,
+        model_dir=None,
+        logfile=sys.stderr,
     ):
         self.logfile = logfile
 
-        self.transcribe_kargs = {}
-        if lan == "auto":
-            self.original_language = None
-        else:
-            self.original_language = lan
+        self.language = language
 
         self.model = self.load_model(model_size, cache_dir, model_dir)
 
     def load_model(self, model_size, cache_dir):
-        raise NotImplemented("must be implemented in the child class")
-
-    def transcribe(self, audio, init_prompt=""):
-        raise NotImplemented("must be implemented in the child class")
-
-    def use_vad(self):
         raise NotImplemented("must be implemented in the child class")
 
 
@@ -100,12 +96,11 @@ class FasterWhisperASR(ASRBase):
         # tested: beam_size=5 is faster and better than 1 (on one 200 second document from En ESIC, min chunk 0.01)
         segments, info = self.model.transcribe(
             audio,
-            language=self.original_language,
+            language=self.language,
             initial_prompt=init_prompt,
             beam_size=5,
             word_timestamps=True,
             condition_on_previous_text=True,
-            **self.transcribe_kargs,
         )
         # print(info)  # info contains language detection result
 
@@ -123,12 +118,6 @@ class FasterWhisperASR(ASRBase):
 
     def segments_end_ts(self, res):
         return [s.end for s in res]
-
-    def use_vad(self):
-        self.transcribe_kargs["vad_filter"] = True
-
-    def set_translate_task(self):
-        self.transcribe_kargs["task"] = "translate"
 
 
 class HypothesisBuffer:
@@ -390,24 +379,11 @@ def add_shared_args(parser):
         help="Dir where Whisper model.bin and other files are saved. This option overrides --model and --model_cache_dir parameter.",
     )
     parser.add_argument(
-        "--lan",
-        "--language",
-        type=str,
-        default="auto",
-        help="Source language code, e.g. en,de,cs, or 'auto' for language detection.",
-    )
-    parser.add_argument(
         "--task",
         type=str,
         default="transcribe",
         choices=["transcribe", "translate"],
         help="Transcribe or translate.",
-    )
-    parser.add_argument(
-        "--vad",
-        action="store_true",
-        default=False,
-        help="Use VAD = voice activity detection, with the default parameters.",
     )
     parser.add_argument(
         "--buffer_trimming",

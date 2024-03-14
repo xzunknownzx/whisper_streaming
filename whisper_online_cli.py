@@ -47,34 +47,22 @@ if __name__ == "__main__":
     duration = len(load_audio(audio_path)) / SAMPLING_RATE
     print("Audio duration is: %2.2f seconds" % duration, file=logfile)
 
-    language = args.lan
     model_size = args.model_size
 
     t = time.time()
     print(
-        f"Loading Whisper {model_size} model for {language}...",
+        f"Loading Whisper {model_size} model...",
         file=logfile,
         end=" ",
         flush=True,
     )
     asr = FasterWhisperASR(
         model_size=model_size,
-        lan=language,
         cache_dir=args.model_cache_dir,
         model_dir=args.model_dir,
     )
     e = time.time()
     print(f"done. It took {round(e-t,2)} seconds.", file=logfile)
-
-    if args.vad:
-        print("setting VAD filter", file=logfile)
-        asr.use_vad()
-
-    if args.task == "translate":
-        asr.set_translate_task()
-        tgt_language = "en"  # Whisper translates into English
-    else:
-        tgt_language = language  # Whisper transcribes in this language
 
     min_chunk = args.min_chunk_size
     tokenizer = None
