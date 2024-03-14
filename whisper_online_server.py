@@ -52,9 +52,6 @@ print(f"done. It took {round(e-t,2)} seconds.")
 
 min_chunk = args.min_chunk_size
 
-online = OnlineASRProcessor(asr, buffer_trimming_sec=args.buffer_trimming_sec)
-
-
 ######### Server objects
 
 
@@ -86,9 +83,8 @@ class Connection:
 # wraps socket and ASR object, and serves one client connection.
 # next client should be served by a new instance of this object
 class ServerProcessor:
-    def __init__(self, c, online_asr_proc, min_chunk):
+    def __init__(self, c: Connection, min_chunk: float):
         self.connection = c
-        self.online_asr_proc = online_asr_proc
         self.min_chunk = min_chunk
 
         self.last_end = None
@@ -149,14 +145,16 @@ class ServerProcessor:
 
     def process(self):
         # handle one client connection
-        self.online_asr_proc.init()
+        online_asr = OnlineASRProcessor(
+            asr, buffer_trimming_sec=args.buffer_trimming_sec
+        )
         while True:
             a = self.receive_audio_chunk()
             if a is None:
                 print("break here")
                 break
-            self.online_asr_proc.insert_audio_chunk(a)
-            o = online.process_iter()
+            online_asr.insert_audio_chunk(a)
+            o = online_asr.process_iter()
             try:
                 self.send_result(o)
             except BrokenPipeError:
@@ -181,7 +179,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         conn, addr = s.accept()
         logging.info("INFO: Connected to client on {}".format(addr))
         connection = Connection(conn)
-        proc = ServerProcessor(connection, online, min_chunk)
+        proc = ServerProcessor(connection, min_chunk)
         proc.process()
         conn.close()
         logging.info("INFO: Connection to client closed")

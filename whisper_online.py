@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from enum import StrEnum
 from functools import lru_cache
+from pathlib import Path
 
 import librosa
 import numpy as np
 from faster_whisper import WhisperModel
+from faster_whisper.transcribe import Segment
 
 SAMPLING_RATE = 16000
 DEVICE = "cpu"
@@ -28,13 +30,16 @@ class ModelSize(StrEnum):
     LARGE = "large"
 
 
+TimestampedSegment = tuple[float, float, str]
+
+
 @lru_cache
-def load_audio(fname):
+def load_audio(fname: str | Path) -> np.ndarray:
     a, _ = librosa.load(fname, sr=SAMPLING_RATE, dtype=np.float32)
     return a
 
 
-def load_audio_chunk(fname, beg, end):
+def load_audio_chunk(fname: str | Path, beg: int, end: int) -> np.ndarray:
     audio = load_audio(fname)
     beg_s = int(beg * SAMPLING_RATE)
     end_s = int(end * SAMPLING_RATE)
@@ -49,15 +54,17 @@ class FasterWhisperASR:
     def __init__(
         self,
         language: str = LANGUAGE,
-        model_size=None,
-        cache_dir=None,
-        model_dir=None,
+        model_size: str | None = None,
+        cache_dir: str | None = None,
+        model_dir: str | None = None,
     ):
         self.language = language
 
         self.model = self.load_model(model_size, cache_dir, model_dir)
 
-    def load_model(self, model_size=None, cache_dir=None, model_dir=None):
+    def load_model(
+        self, model_size=None, cache_dir=None, model_dir=None
+    ) -> WhisperModel:
         if model_dir is not None:
             print(
                 f"Loading whisper model from model_dir {model_dir}. model_size and cache_dir parameters are not used."
@@ -77,7 +84,7 @@ class FasterWhisperASR:
 
         return model
 
-    def transcribe(self, audio, init_prompt=""):
+    def transcribe(self, audio: np.ndarray, init_prompt="") -> list[Segment]:
         # tested: beam_size=5 is faster and better than 1 (on one 200 second document from En ESIC, min chunk 0.01)
         segments, info = self.model.transcribe(
             audio,
@@ -91,7 +98,7 @@ class FasterWhisperASR:
 
         return list(segments)
 
-    def ts_words(self, segments):
+    def ts_words(self, segments: list[Segment]) -> list[TimestampedSegment]:
         o = []
         for segment in segments:
             for word in segment.words:
@@ -107,23 +114,27 @@ class FasterWhisperASR:
 
 class HypothesisBuffer:
     def __init__(self):
-        self.commited_in_buffer = []
-        self.buffer = []
-        self.new = []
+        self.commited_in_buffer: list[TimestampedSegment] = []
+        self.buffer: list[TimestampedSegment] = []
+        self.new: list[TimestampedSegment] = []
 
         self.last_commited_time = 0
-        self.last_commited_word = None
+        self.last_commited_word: str | None = None
 
-    def insert(self, new, offset):
+    def insert(self, new: list[TimestampedSegment], offset: float) -> None:
         # compare self.commited_in_buffer and new. It inserts only the words in new that extend the commited_in_buffer, it means they are roughly behind last_commited_time and new in content
         # the new tail is added to self.new
 
-        new = [(a + offset, b + offset, t) for a, b, t in new]
-        self.new = [(a, b, t) for a, b, t in new if a > self.last_commited_time - 0.1]
+        new = [(start + offset, end + offset, contents) for start, end, contents in new]
+        self.new = [
+            (start, end, contents)
+            for start, end, contents in new
+            if start > self.last_commited_time - 0.1
+        ]
 
         if len(self.new) >= 1:
-            a, b, t = self.new[0]
-            if abs(a - self.last_commited_time) < 1:
+            start, _, _ = self.new[0]
+            if abs(start - self.last_commited_time) < 1:
                 if self.commited_in_buffer:
                     # it's going to search for 1, 2, ..., 5 consecutive words (n-grams) that are identical in commited and new. If they are, they're dropped.
                     cn = len(self.commited_in_buffer)
@@ -141,20 +152,20 @@ class HypothesisBuffer:
                                 print("\t", self.new.pop(0))
                             break
 
-    def flush(self):
+    def flush(self) -> list[TimestampedSegment]:
         # returns commited chunk = the longest common prefix of 2 last inserts.
 
-        commit = []
+        commit: list[TimestampedSegment] = []
         while self.new:
-            na, nb, nt = self.new[0]
+            start, end, contents = self.new[0]
 
             if len(self.buffer) == 0:
                 break
 
-            if nt == self.buffer[0][2]:
-                commit.append((na, nb, nt))
-                self.last_commited_word = nt
-                self.last_commited_time = nb
+            if contents == self.buffer[0][2]:
+                commit.append((start, end, contents))
+                self.last_commited_word = contents
+                self.last_commited_time = end
                 self.buffer.pop(0)
                 self.new.pop(0)
             else:
@@ -173,28 +184,26 @@ class HypothesisBuffer:
 
 
 class OnlineASRProcessor:
-    def __init__(self, asr, buffer_trimming_sec=TRIM_BUFFER_AFTER_SEC):
+    def __init__(
+        self, asr: FasterWhisperASR, buffer_trimming_sec=TRIM_BUFFER_AFTER_SEC
+    ):
         """asr: WhisperASR object
         buffer_trimming_sec: Buffer is trimmed if it is longer than "seconds" threshold. Default is the most recommended option.
         """
         self.asr = asr
 
-        self.init()
-
-        self.buffer_trimming_sec = buffer_trimming_sec
-
-    def init(self):
-        """run this when starting or restarting processing"""
         self.audio_buffer = np.array([], dtype=np.float32)
         self.buffer_time_offset = 0
 
         self.transcript_buffer = HypothesisBuffer()
-        self.commited = []
+        self.commited: list[TimestampedSegment] = []
+
+        self.buffer_trimming_sec = buffer_trimming_sec
 
     def insert_audio_chunk(self, audio):
         self.audio_buffer = np.append(self.audio_buffer, audio)
 
-    def prompt(self):
+    def prompt(self) -> tuple[str, str]:
         """Returns a tuple: (prompt, context), where "prompt" is a 200-character suffix of commited text that is inside of the scrolled away part of audio buffer.
         "context" is the commited text that is inside the audio buffer. It is transcribed again and skipped. It is returned only for debugging and logging reasons.
         """
@@ -261,7 +270,7 @@ class OnlineASRProcessor:
         print(f"len of buffer now: {len(self.audio_buffer)/SAMPLING_RATE:2.2f}")
         return self.to_flush(o)
 
-    def chunk_completed_segment(self, res):
+    def chunk_completed_segment(self, res: list[Segment]):
         if self.commited == []:
             return
 
@@ -300,23 +309,21 @@ class OnlineASRProcessor:
 
     def to_flush(
         self,
-        sents,
+        ts_segments: list[TimestampedSegment],
         sep=None,
         offset=0,
-    ):
+    ) -> TimestampedSegment | tuple[None, None, str]:
         # concatenates the timestamped words or sentences into one sequence that is flushed in one line
         # sents: [(beg1, end1, "sentence1"), ...] or [] if empty
         # return: (beg1,end-of-last-sentence,"concatenation of sentences") or (None, None, "") if empty
+        if len(ts_segments) == 0:
+            return (None, None, "")
         if sep is None:
             sep = self.asr.sep
-        t = sep.join(s[2] for s in sents)
-        if len(sents) == 0:
-            b = None
-            e = None
-        else:
-            b = offset + sents[0][0]
-            e = offset + sents[-1][1]
-        return (b, e, t)
+        contents = sep.join(ts_segment[2] for ts_segment in ts_segments)
+        start = offset + ts_segments[0][0]
+        end = offset + ts_segments[-1][1]
+        return (start, end, contents)
 
 
 def add_shared_args(parser):
