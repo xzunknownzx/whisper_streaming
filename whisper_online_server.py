@@ -51,11 +51,8 @@ print(f"done. It took {round(e-t,2)} seconds.")
 
 
 min_chunk = args.min_chunk_size
-tokenizer = None
 
-online = OnlineASRProcessor(
-    asr, tokenizer, buffer_trimming=(args.buffer_trimming, args.buffer_trimming_sec)
-)
+online = OnlineASRProcessor(asr, buffer_trimming_sec=args.buffer_trimming_sec)
 
 
 ######### Server objects

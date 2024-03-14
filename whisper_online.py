@@ -10,6 +10,7 @@ SAMPLING_RATE = 16000
 DEVICE = "cpu"
 COMPUTE_TYPE = "int8"
 LANGUAGE = "en"
+TRIM_BUFFER_AFTER_SEC = 15
 
 
 class ModelSize(StrEnum):
@@ -172,18 +173,15 @@ class HypothesisBuffer:
 
 
 class OnlineASRProcessor:
-    def __init__(self, asr, tokenizer=None, buffer_trimming=("segment", 15)):
+    def __init__(self, asr, buffer_trimming_sec=TRIM_BUFFER_AFTER_SEC):
         """asr: WhisperASR object
-        tokenizer: sentence tokenizer object for the target language. Must have a method *split* that behaves like the one of MosesTokenizer. It can be None, if "segment" buffer trimming option is used, then tokenizer is not used at all.
-        ("segment", 15)
-        buffer_trimming: a pair of (option, seconds), where option is either "sentence" or "segment", and seconds is a number. Buffer is trimmed if it is longer than "seconds" threshold. Default is the most recommended option.
+        buffer_trimming_sec: Buffer is trimmed if it is longer than "seconds" threshold. Default is the most recommended option.
         """
         self.asr = asr
-        self.tokenizer = tokenizer
 
         self.init()
 
-        self.buffer_trimming_way, self.buffer_trimming_sec = buffer_trimming
+        self.buffer_trimming_sec = buffer_trimming_sec
 
     def init(self):
         """run this when starting or restarting processing"""
@@ -246,9 +244,8 @@ class OnlineASRProcessor:
 
         # there is a newly confirmed text
 
-        s = self.buffer_trimming_sec  # trim the completed segments longer than s,
-
-        if len(self.audio_buffer) / SAMPLING_RATE > s:
+        # trim the completed segments longer than s,
+        if len(self.audio_buffer) / SAMPLING_RATE > self.buffer_trimming_sec:
             self.chunk_completed_segment(res)
 
             # alternative: on any word
@@ -350,13 +347,6 @@ def add_shared_args(parser):
         type=str,
         default=None,
         help="Dir where Whisper model.bin and other files are saved. This option overrides --model and --model_cache_dir parameter.",
-    )
-    parser.add_argument(
-        "--buffer_trimming",
-        type=str,
-        default="segment",
-        choices=["segment"],
-        help='Buffer trimming strategy -- trim completed sentences marked with punctuation mark and detected by sentence segmenter, or the completed segments returned by Whisper. Sentence segmenter must be installed for "sentence" option.',
     )
     parser.add_argument(
         "--buffer_trimming_sec",
