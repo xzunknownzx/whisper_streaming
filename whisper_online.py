@@ -39,7 +39,7 @@ def load_audio(fname: str | Path) -> np.ndarray:
     return a
 
 
-def load_audio_chunk(fname: str | Path, beg: int, end: int) -> np.ndarray:
+def load_audio_chunk(fname: str | Path, beg: float, end: float) -> np.ndarray:
     audio = load_audio(fname)
     beg_s = int(beg * SAMPLING_RATE)
     end_s = int(end * SAMPLING_RATE)
@@ -224,7 +224,7 @@ class OnlineASRProcessor:
             t for _, _, t in non_prompt
         )
 
-    def process_iter(self):
+    def process_iter(self) -> TimestampedSegment:
         """Runs on the current audio buffer.
         Returns: a tuple (beg_timestamp, end_timestamp, "text"), or (None, None, "").
         The non-emty text is confirmed (committed) partial transcript.
@@ -244,12 +244,8 @@ class OnlineASRProcessor:
         self.transcript_buffer.insert(tsw, self.buffer_time_offset)
         o = self.transcript_buffer.flush()
         self.commited.extend(o)
-        print(">>>>COMPLETE NOW:", self.to_flush(o), flush=True)
-        print(
-            "INCOMPLETE:",
-            self.to_flush(self.transcript_buffer.complete()),
-            flush=True,
-        )
+        print(">>>>COMPLETE NOW:", self.to_flush(o))
+        print("INCOMPLETE:", self.to_flush(self.transcript_buffer.complete()))
 
         # there is a newly confirmed text
 

@@ -3,8 +3,8 @@ import sys
 import time
 
 from whisper_online import (SAMPLING_RATE, FasterWhisperASR,
-                            OnlineASRProcessor, add_shared_args, load_audio,
-                            load_audio_chunk)
+                            OnlineASRProcessor, TimestampedSegment,
+                            add_shared_args, load_audio, load_audio_chunk)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -46,11 +46,7 @@ if __name__ == "__main__":
     model_size = args.model_size
 
     t = time.time()
-    print(
-        f"Loading Whisper {model_size} model...",
-        end=" ",
-        flush=True,
-    )
+    print(f"Loading Whisper {model_size} model...")
     asr = FasterWhisperASR(
         model_size=model_size,
         cache_dir=args.model_cache_dir,
@@ -60,21 +56,21 @@ if __name__ == "__main__":
     print(f"done. It took {round(e-t,2)} seconds.")
 
     min_chunk = args.min_chunk_size
-    online = OnlineASRProcessor(
+    online_asr = OnlineASRProcessor(
         asr,
         buffer_trimming_sec=args.buffer_trimming_sec,
     )
 
     # load the audio into the LRU cache before we start the timer
-    a = load_audio_chunk(audio_path, 0, 1)
+    audio_chunk = load_audio_chunk(audio_path, 0, 1)
 
     # warm up the ASR, because the very first transcribe takes much more time than the other
-    asr.transcribe(a)
+    asr.transcribe(audio_chunk)
 
-    beg = args.start_at
+    beg: float = args.start_at
     start = time.time() - beg
 
-    def output_transcript(o, now=None):
+    def output_transcript(o: TimestampedSegment, now=None) -> None:
         # output format in stdout is like:
         # 4186.3606 0 1720 Takhle to je
         # - the first three words are:
@@ -84,22 +80,16 @@ if __name__ == "__main__":
         if now is None:
             now = time.time() - start
         if o[0] is not None:
-            print(
-                "%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2]),
-                flush=True,
-            )
-            print(
-                "%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2]),
-                flush=True,
-            )
+            print("%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2]))
+            print("%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2]))
         else:
-            print(o, flush=True)
+            print(o)
 
     if args.offline:  ## offline mode processing (for testing/debugging)
-        a = load_audio(audio_path)
-        online.insert_audio_chunk(a)
+        audio_chunk = load_audio(audio_path)
+        online_asr.insert_audio_chunk(audio_chunk)
         try:
-            o = online.process_iter()
+            o = online_asr.process_iter()
         except AssertionError:
             print("assertion error")
             pass
@@ -109,17 +99,17 @@ if __name__ == "__main__":
     elif args.comp_unaware:  # computational unaware mode
         end = beg + min_chunk
         while True:
-            a = load_audio_chunk(audio_path, beg, end)
-            online.insert_audio_chunk(a)
+            audio_chunk = load_audio_chunk(audio_path, beg, end)
+            online_asr.insert_audio_chunk(audio_chunk)
             try:
-                o = online.process_iter()
+                o = online_asr.process_iter()
             except AssertionError:
                 print("assertion error")
                 pass
             else:
                 output_transcript(o, now=end)
 
-            print(f"## last processed {end:.2f}s", flush=True)
+            print(f"## last processed {end:.2f}s")
 
             if end >= duration:
                 break
@@ -139,12 +129,12 @@ if __name__ == "__main__":
             if now < end + min_chunk:
                 time.sleep(min_chunk + end - now)
             end = time.time() - start
-            a = load_audio_chunk(audio_path, beg, end)
+            audio_chunk = load_audio_chunk(audio_path, beg, end)
             beg = end
-            online.insert_audio_chunk(a)
+            online_asr.insert_audio_chunk(audio_chunk)
 
             try:
-                o = online.process_iter()
+                o = online_asr.process_iter()
             except AssertionError:
                 print("assertion error")
                 pass
@@ -152,13 +142,12 @@ if __name__ == "__main__":
                 output_transcript(o)
             now = time.time() - start
             print(
-                f"## last processed {end:.2f} s, now is {now:.2f}, the latency is {now-end:.2f}",
-                flush=True,
+                f"## last processed {end:.2f} s, now is {now:.2f}, the latency is {now-end:.2f}"
             )
 
             if end >= duration:
                 break
         now = None
 
-    o = online.finish()
+    o = online_asr.finish()
     output_transcript(o, now=now)

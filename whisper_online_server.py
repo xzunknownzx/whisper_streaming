@@ -33,11 +33,7 @@ args = parser.parse_args()
 model_size = args.model_size
 
 t = time.time()
-print(
-    f"Loading Whisper {model_size} model...",
-    end=" ",
-    flush=True,
-)
+print(f"Loading Whisper {model_size} model...")
 
 
 asr = FasterWhisperASR(
@@ -132,10 +128,10 @@ class ServerProcessor:
                 beg = max(beg, self.last_end)
 
             self.last_end = end
-            print("%1.0f %1.0f %s" % (beg, end, o[2]), flush=True)
+            print("%1.0f %1.0f %s" % (beg, end, o[2]))
             return "%1.0f %1.0f %s" % (beg, end, o[2])
         else:
-            print(o, flush=True)
+            print(o)
             return None
 
     def send_result(self, o):
