@@ -2,6 +2,7 @@
 import argparse
 import sys
 import time
+from enum import StrEnum
 from functools import lru_cache
 
 import librosa
@@ -11,6 +12,21 @@ from faster_whisper import WhisperModel
 SAMPLING_RATE = 16000
 DEVICE = "cpu"
 COMPUTE_TYPE = "int8"
+
+
+class ModelSize(StrEnum):
+    TINY_EN = "tiny.en"
+    TINY = "tiny"
+    BASE_EN = "base.en"
+    BASE = "base"
+    SMALL_EN = "small.en"
+    SMALL = "small"
+    MEDIUM_EN = "medium.en"
+    MEDIUM = "medium"
+    LARGE_V1 = "large-v1"
+    LARGE_V2 = "large-v2"
+    LARGE_V3 = "large-v3"
+    LARGE = "large"
 
 
 @lru_cache
@@ -34,7 +50,7 @@ class ASRBase:
     # "" for faster-whisper because it emits the spaces when neeeded)
 
     def __init__(
-        self, lan, modelsize=None, cache_dir=None, model_dir=None, logfile=sys.stderr
+        self, lan, model_size=None, cache_dir=None, model_dir=None, logfile=sys.stderr
     ):
         self.logfile = logfile
 
@@ -44,9 +60,9 @@ class ASRBase:
         else:
             self.original_language = lan
 
-        self.model = self.load_model(modelsize, cache_dir, model_dir)
+        self.model = self.load_model(model_size, cache_dir, model_dir)
 
-    def load_model(self, modelsize, cache_dir):
+    def load_model(self, model_size, cache_dir):
         raise NotImplemented("must be implemented in the child class")
 
     def transcribe(self, audio, init_prompt=""):
@@ -61,17 +77,17 @@ class FasterWhisperASR(ASRBase):
 
     sep = ""
 
-    def load_model(self, modelsize=None, cache_dir=None, model_dir=None):
+    def load_model(self, model_size=None, cache_dir=None, model_dir=None):
         if model_dir is not None:
             print(
-                f"Loading whisper model from model_dir {model_dir}. modelsize and cache_dir parameters are not used.",
+                f"Loading whisper model from model_dir {model_dir}. model_size and cache_dir parameters are not used.",
                 file=self.logfile,
             )
             model_size_or_path = model_dir
-        elif modelsize is not None:
-            model_size_or_path = modelsize
+        elif model_size is not None:
+            model_size_or_path = model_size
         else:
-            raise ValueError("modelsize or model_dir parameter must be set")
+            raise ValueError("model_size or model_dir parameter must be set")
 
         model = WhisperModel(
             model_size_or_path,
@@ -357,13 +373,11 @@ def add_shared_args(parser):
         help="Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole segment that was received by this time.",
     )
     parser.add_argument(
-        "--model",
+        "--model-size",
         type=str,
-        default="large-v2",
-        choices="tiny.en,tiny,base.en,base,small.en,small,medium.en,medium,large-v1,large-v2,large-v3,large".split(
-            ","
-        ),
-        help="Name size of the Whisper model to use (default: large-v2). The model is automatically downloaded from the model hub if not present in model cache dir.",
+        default=ModelSize.TINY_EN,
+        choices=[e.value for e in ModelSize],
+        help="Name size of the Whisper model to use (default: tiny.en). The model is automatically downloaded from the model hub if not present in model cache dir.",
     )
     parser.add_argument(
         "--model_cache_dir",
@@ -456,17 +470,17 @@ if __name__ == "__main__":
     print("Audio duration is: %2.2f seconds" % duration, file=logfile)
 
     language = args.lan
-    size = args.model
+    model_size = args.model_size
 
     t = time.time()
     print(
-        f"Loading Whisper {size} model for {language}...",
+        f"Loading Whisper {model_size} model for {language}...",
         file=logfile,
         end=" ",
         flush=True,
     )
     asr = FasterWhisperASR(
-        modelsize=size,
+        model_size=model_size,
         lan=language,
         cache_dir=args.model_cache_dir,
         model_dir=args.model_dir,

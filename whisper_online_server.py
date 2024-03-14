@@ -31,12 +31,12 @@ args = parser.parse_args()
 
 # setting whisper object by args
 
-size = args.model
+model_size = args.model_size
 language = args.lan
 
 t = time.time()
 print(
-    f"Loading Whisper {size} model for {language}...",
+    f"Loading Whisper {model_size} model for {language}...",
     file=sys.stderr,
     end=" ",
     flush=True,
@@ -44,7 +44,7 @@ print(
 
 
 asr = FasterWhisperASR(
-    modelsize=size,
+    model_size=model_size,
     lan=language,
     cache_dir=args.model_cache_dir,
     model_dir=args.model_dir,
