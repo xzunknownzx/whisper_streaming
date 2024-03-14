@@ -352,13 +352,6 @@ def add_shared_args(parser):
         help="Dir where Whisper model.bin and other files are saved. This option overrides --model and --model_cache_dir parameter.",
     )
     parser.add_argument(
-        "--task",
-        type=str,
-        default="transcribe",
-        choices=["transcribe", "translate"],
-        help="Transcribe or translate.",
-    )
-    parser.add_argument(
         "--buffer_trimming",
         type=str,
         default="segment",
