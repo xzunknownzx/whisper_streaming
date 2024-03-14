@@ -34,20 +34,8 @@ print(
     flush=True,
 )
 
-if args.backend == "faster-whisper":
-    from faster_whisper import WhisperModel
 
-    asr_cls = FasterWhisperASR
-elif args.backend == "openai-api":
-    asr_cls = OpenaiApiASR
-else:
-    import whisper
-    import whisper_timestamped
-
-    #    from whisper_timestamped_model import WhisperTimestampedASR
-    asr_cls = WhisperTimestampedASR
-
-asr = asr_cls(
+asr = FasterWhisperASR(
     modelsize=size,
     lan=language,
     cache_dir=args.model_cache_dir,
