@@ -267,16 +267,7 @@ class OnlineASRProcessor:
 
         # there is a newly confirmed text
 
-        if o and self.buffer_trimming_way == "sentence":  # trim the completed sentences
-            if (
-                len(self.audio_buffer) / self.SAMPLING_RATE > self.buffer_trimming_sec
-            ):  # longer than this
-                self.chunk_completed_sentence()
-
-        if self.buffer_trimming_way == "segment":
-            s = self.buffer_trimming_sec  # trim the completed segments longer than s,
-        else:
-            s = 30  # if the audio buffer is longer than 30s, trim it
+        s = self.buffer_trimming_sec  # trim the completed segments longer than s,
 
         if len(self.audio_buffer) / self.SAMPLING_RATE > s:
             self.chunk_completed_segment(res)
@@ -296,23 +287,6 @@ class OnlineASRProcessor:
             file=self.logfile,
         )
         return self.to_flush(o)
-
-    def chunk_completed_sentence(self):
-        if self.commited == []:
-            return
-        print(self.commited, file=self.logfile)
-        sents = self.words_to_sentences(self.commited)
-        for s in sents:
-            print("\t\tSENT:", s, file=self.logfile)
-        if len(sents) < 2:
-            return
-        while len(sents) > 2:
-            sents.pop(0)
-        # we will continue with audio processing at this timestamp
-        chunk_at = sents[-2][1]
-
-        print(f"--- sentence chunked at {chunk_at:2.2f}", file=self.logfile)
-        self.chunk_at(chunk_at)
 
     def chunk_completed_segment(self, res):
         if self.commited == []:
@@ -342,32 +316,6 @@ class OnlineASRProcessor:
         self.audio_buffer = self.audio_buffer[int(cut_seconds * self.SAMPLING_RATE) :]
         self.buffer_time_offset = time
 
-    def words_to_sentences(self, words):
-        """Uses self.tokenizer for sentence segmentation of words.
-        Returns: [(beg,end,"sentence 1"),...]
-        """
-
-        cwords = [w for w in words]
-        t = " ".join(o[2] for o in cwords)
-        s = self.tokenizer.split(t)
-        out = []
-        while s:
-            beg = None
-            end = None
-            sent = s.pop(0).strip()
-            fsent = sent
-            while cwords:
-                b, e, w = cwords.pop(0)
-                w = w.strip()
-                if beg is None and sent.startswith(w):
-                    beg = b
-                elif end is None and sent == w:
-                    end = e
-                    out.append((beg, end, fsent))
-                    break
-                sent = sent[len(w) :].strip()
-        return out
-
     def finish(self):
         """Flush the incomplete text when the whole processing ends.
         Returns: the same format as self.process_iter()
@@ -396,59 +344,6 @@ class OnlineASRProcessor:
             b = offset + sents[0][0]
             e = offset + sents[-1][1]
         return (b, e, t)
-
-
-WHISPER_LANG_CODES = "af,am,ar,as,az,ba,be,bg,bn,bo,br,bs,ca,cs,cy,da,de,el,en,es,et,eu,fa,fi,fo,fr,gl,gu,ha,haw,he,hi,hr,ht,hu,hy,id,is,it,ja,jw,ka,kk,km,kn,ko,la,lb,ln,lo,lt,lv,mg,mi,mk,ml,mn,mr,ms,mt,my,ne,nl,nn,no,oc,pa,pl,ps,pt,ro,ru,sa,sd,si,sk,sl,sn,so,sq,sr,su,sv,sw,ta,te,tg,th,tk,tl,tr,tt,uk,ur,uz,vi,yi,yo,zh".split(
-    ","
-)
-
-
-def create_tokenizer(lan):
-    """returns an object that has split function that works like the one of MosesTokenizer"""
-
-    assert (
-        lan in WHISPER_LANG_CODES
-    ), "language must be Whisper's supported lang code: " + " ".join(WHISPER_LANG_CODES)
-
-    if lan == "uk":
-        import tokenize_uk
-
-        class UkrainianTokenizer:
-            def split(self, text):
-                return tokenize_uk.tokenize_sents(text)
-
-        return UkrainianTokenizer()
-
-    # supported by fast-mosestokenizer
-    if (
-        lan
-        in "as bn ca cs de el en es et fi fr ga gu hi hu is it kn lt lv ml mni mr nl or pa pl pt ro ru sk sl sv ta te yue zh".split()
-    ):
-        from mosestokenizer import MosesTokenizer
-
-        return MosesTokenizer(lan)
-
-    # the following languages are in Whisper, but not in wtpsplit:
-    if (
-        lan
-        in "as ba bo br bs fo haw hr ht jw lb ln lo mi nn oc sa sd sn so su sw tk tl tt".split()
-    ):
-        print(
-            f"{lan} code is not supported by wtpsplit. Going to use None lang_code option.",
-            file=sys.stderr,
-        )
-        lan = None
-
-    from wtpsplit import WtP
-
-    # downloads the model from huggingface on the first use
-    wtp = WtP("wtp-canine-s-12l-no-adapters")
-
-    class WtPtok:
-        def split(self, sent):
-            return wtp.split(sent, lang_code=lan)
-
-    return WtPtok()
 
 
 def add_shared_args(parser):
@@ -513,7 +408,7 @@ def add_shared_args(parser):
         "--buffer_trimming",
         type=str,
         default="segment",
-        choices=["sentence", "segment"],
+        choices=["segment"],
         help='Buffer trimming strategy -- trim completed sentences marked with punctuation mark and detected by sentence segmenter, or the completed segments returned by Whisper. Sentence segmenter must be installed for "sentence" option.',
     )
     parser.add_argument(
@@ -600,10 +495,7 @@ if __name__ == "__main__":
         tgt_language = language  # Whisper transcribes in this language
 
     min_chunk = args.min_chunk_size
-    if args.buffer_trimming == "sentence":
-        tokenizer = create_tokenizer(tgt_language)
-    else:
-        tokenizer = None
+    tokenizer = None
     online = OnlineASRProcessor(
         asr,
         tokenizer,

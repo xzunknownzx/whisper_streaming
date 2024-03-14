@@ -57,11 +57,8 @@ if args.vad:
 
 
 min_chunk = args.min_chunk_size
+tokenizer = None
 
-if args.buffer_trimming == "sentence":
-    tokenizer = create_tokenizer(tgt_language)
-else:
-    tokenizer = None
 online = OnlineASRProcessor(
     asr, tokenizer, buffer_trimming=(args.buffer_trimming, args.buffer_trimming_sec)
 )
