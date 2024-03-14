@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import logging
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -66,7 +67,7 @@ class FasterWhisperASR:
         self, model_size=None, cache_dir=None, model_dir=None
     ) -> WhisperModel:
         if model_dir is not None:
-            print(
+            logging.debug(
                 f"Loading whisper model from model_dir {model_dir}. model_size and cache_dir parameters are not used."
             )
             model_size_or_path = model_dir
@@ -94,7 +95,7 @@ class FasterWhisperASR:
             word_timestamps=True,
             condition_on_previous_text=True,
         )
-        # print(info)  # info contains language detection result
+        # logging.debug(info)  # info contains language detection result
 
         return list(segments)
 
@@ -147,9 +148,9 @@ class HypothesisBuffer:
                         )
                         tail = " ".join(self.new[j - 1][2] for j in range(1, i + 1))
                         if c == tail:
-                            print("removing last", i, "words:")
+                            logging.debug("removing last", i, "words:")
                             for j in range(i):
-                                print("\t", self.new.pop(0))
+                                logging.debug("\t", self.new.pop(0))
                             break
 
     def flush(self) -> list[TimestampedSegment]:
@@ -231,9 +232,9 @@ class OnlineASRProcessor:
         """
 
         prompt, non_prompt = self.prompt()
-        print("PROMPT:", prompt)
-        print("CONTEXT:", non_prompt)
-        print(
+        logging.debug("PROMPT:", prompt)
+        logging.debug("CONTEXT:", non_prompt)
+        logging.debug(
             f"transcribing {len(self.audio_buffer)/SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}"
         )
         res = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
@@ -244,8 +245,8 @@ class OnlineASRProcessor:
         self.transcript_buffer.insert(tsw, self.buffer_time_offset)
         o = self.transcript_buffer.flush()
         self.commited.extend(o)
-        print(">>>>COMPLETE NOW:", self.to_flush(o))
-        print("INCOMPLETE:", self.to_flush(self.transcript_buffer.complete()))
+        logging.debug(">>>>COMPLETE NOW:", self.to_flush(o))
+        logging.debug("INCOMPLETE:", self.to_flush(self.transcript_buffer.complete()))
 
         # there is a newly confirmed text
 
@@ -260,10 +261,10 @@ class OnlineASRProcessor:
             # while k>0 and self.commited[k][1] > l:
             #    k -= 1
             # t = self.commited[k][1]
-            print(f"chunking segment")
+            logging.debug(f"chunking segment")
             # self.chunk_at(t)
 
-        print(f"len of buffer now: {len(self.audio_buffer)/SAMPLING_RATE:2.2f}")
+        logging.debug(f"len of buffer now: {len(self.audio_buffer)/SAMPLING_RATE:2.2f}")
         return self.to_flush(o)
 
     def chunk_completed_segment(self, res: list[Segment]):
@@ -280,12 +281,12 @@ class OnlineASRProcessor:
                 ends.pop(-1)
                 e = ends[-2] + self.buffer_time_offset
             if e <= t:
-                print(f"--- segment chunked at {e:2.2f}")
+                logging.debug(f"--- segment chunked at {e:2.2f}")
                 self.chunk_at(e)
             else:
-                print(f"--- last segment not within commited area")
+                logging.debug(f"--- last segment not within commited area")
         else:
-            print(f"--- not enough segments to chunk")
+            logging.debug(f"--- not enough segments to chunk")
 
     def chunk_at(self, time):
         """trims the hypothesis and audio buffer at "time" """
@@ -300,7 +301,7 @@ class OnlineASRProcessor:
         """
         o = self.transcript_buffer.complete()
         f = self.to_flush(o)
-        print("last, noncommited:", f)
+        logging.debug("last, noncommited:", f)
         return f
 
     def to_flush(

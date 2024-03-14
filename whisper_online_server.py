@@ -33,7 +33,7 @@ args = parser.parse_args()
 model_size = args.model_size
 
 t = time.time()
-print(f"Loading Whisper {model_size} model...")
+logging.debug(f"Loading Whisper {model_size} model...")
 
 
 asr = FasterWhisperASR(
@@ -43,7 +43,7 @@ asr = FasterWhisperASR(
 )
 
 e = time.time()
-print(f"done. It took {round(e-t,2)} seconds.")
+logging.debug(f"done. It took {round(e-t,2)} seconds.")
 
 
 min_chunk = args.min_chunk_size
@@ -92,8 +92,8 @@ class ServerProcessor:
         out = []
         while sum(len(x) for x in out) < self.min_chunk * SAMPLING_RATE:
             raw_bytes = self.connection.non_blocking_receive_audio()
-            print(raw_bytes[:10])
-            print(len(raw_bytes))
+            logging.debug(raw_bytes[:10])
+            logging.debug(len(raw_bytes))
             if not raw_bytes:
                 break
             sf = soundfile.SoundFile(
@@ -128,10 +128,10 @@ class ServerProcessor:
                 beg = max(beg, self.last_end)
 
             self.last_end = end
-            print("%1.0f %1.0f %s" % (beg, end, o[2]))
+            logging.debug("%1.0f %1.0f %s" % (beg, end, o[2]))
             return "%1.0f %1.0f %s" % (beg, end, o[2])
         else:
-            print(o)
+            logging.debug(o)
             return None
 
     def send_result(self, o):
@@ -147,14 +147,14 @@ class ServerProcessor:
         while True:
             a = self.receive_audio_chunk()
             if a is None:
-                print("break here")
+                logging.debug("break here")
                 break
             online_asr.insert_audio_chunk(a)
             o = online_asr.process_iter()
             try:
                 self.send_result(o)
             except BrokenPipeError:
-                print("broken pipe -- connection closed?")
+                logging.debug("broken pipe -- connection closed?")
                 break
 
 

@@ -1,10 +1,15 @@
 import argparse
+import logging
 import sys
 import time
 
 from whisper_online import (SAMPLING_RATE, FasterWhisperASR,
                             OnlineASRProcessor, TimestampedSegment,
                             add_shared_args, load_audio, load_audio_chunk)
+
+LOG_LEVEL = logging.ERROR
+logging = logging.getLogger(__name__)
+logging.setLevel(LOG_LEVEL)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -33,7 +38,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.offline and args.comp_unaware:
-        print(
+        logging.debug(
             "No or one option from --offline and --comp_unaware are available, not both. Exiting."
         )
         sys.exit(1)
@@ -41,19 +46,19 @@ if __name__ == "__main__":
     audio_path = args.audio_path
 
     duration = len(load_audio(audio_path)) / SAMPLING_RATE
-    print("Audio duration is: %2.2f seconds" % duration)
+    logging.debug("Audio duration is: %2.2f seconds" % duration)
 
     model_size = args.model_size
 
     t = time.time()
-    print(f"Loading Whisper {model_size} model...")
+    logging.debug(f"Loading Whisper {model_size} model...")
     asr = FasterWhisperASR(
         model_size=model_size,
         cache_dir=args.model_cache_dir,
         model_dir=args.model_dir,
     )
     e = time.time()
-    print(f"done. It took {round(e-t,2)} seconds.")
+    logging.debug(f"done. It took {round(e-t,2)} seconds.")
 
     min_chunk = args.min_chunk_size
     online_asr = OnlineASRProcessor(
@@ -80,10 +85,14 @@ if __name__ == "__main__":
         if now is None:
             now = time.time() - start
         if o[0] is not None:
-            print("%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2]))
-            print("%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2]))
+            logging.debug(
+                "%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2])
+            )
+            logging.debug(
+                "%1.4f %1.0f %1.0f %s" % (now * 1000, o[0] * 1000, o[1] * 1000, o[2])
+            )
         else:
-            print(o)
+            logging.debug(o)
 
     if args.offline:  ## offline mode processing (for testing/debugging)
         audio_chunk = load_audio(audio_path)
@@ -91,7 +100,7 @@ if __name__ == "__main__":
         try:
             o = online_asr.process_iter()
         except AssertionError:
-            print("assertion error")
+            logging.debug("assertion error")
             pass
         else:
             output_transcript(o)
@@ -104,12 +113,12 @@ if __name__ == "__main__":
             try:
                 o = online_asr.process_iter()
             except AssertionError:
-                print("assertion error")
+                logging.debug("assertion error")
                 pass
             else:
                 output_transcript(o, now=end)
 
-            print(f"## last processed {end:.2f}s")
+            logging.debug(f"## last processed {end:.2f}s")
 
             if end >= duration:
                 break
@@ -136,12 +145,12 @@ if __name__ == "__main__":
             try:
                 o = online_asr.process_iter()
             except AssertionError:
-                print("assertion error")
+                logging.debug("assertion error")
                 pass
             else:
                 output_transcript(o)
             now = time.time() - start
-            print(
+            logging.debug(
                 f"## last processed {end:.2f} s, now is {now:.2f}, the latency is {now-end:.2f}"
             )
 
