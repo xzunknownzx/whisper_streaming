@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-import io
-import math
+import argparse
 import sys
 import time
 from functools import lru_cache
 
 import librosa
 import numpy as np
-import soundfile as sf
 from faster_whisper import WhisperModel
 
 
@@ -422,8 +420,6 @@ def add_shared_args(parser):
 ## main:
 
 if __name__ == "__main__":
-    import argparse
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "audio_path",

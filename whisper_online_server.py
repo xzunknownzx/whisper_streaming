@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 import argparse
-import os
+import io
+import logging
+import socket
 import sys
+import time
 
+import librosa
 import numpy as np
+import soundfile
 
-from whisper_online import *
+import line_packet
+from whisper_online import (FasterWhisperASR, OnlineASRProcessor,
+                            add_shared_args)
 
 parser = argparse.ArgumentParser()
 
@@ -64,24 +71,7 @@ online = OnlineASRProcessor(
 )
 
 
-demo_audio_path = "cs-maji-2.16k.wav"
-if os.path.exists(demo_audio_path):
-    # load the audio into the LRU cache before we start the timer
-    a = load_audio_chunk(demo_audio_path, 0, 1)
-
-    # TODO: it should be tested whether it's meaningful
-    # warm up the ASR, because the very first transcribe takes much more time than the other
-    asr.transcribe(a)
-else:
-    print("Whisper is not warmed up", file=sys.stderr)
-
-
 ######### Server objects
-
-import logging
-import socket
-
-import line_packet
 
 
 class Connection:
@@ -109,11 +99,6 @@ class Connection:
     def non_blocking_receive_audio(self):
         r = self.conn.recv(self.PACKET_SIZE)
         return r
-
-
-import io
-
-import soundfile
 
 
 # wraps socket and ASR object, and serves one client connection.
