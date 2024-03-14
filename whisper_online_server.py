@@ -11,8 +11,11 @@ import numpy as np
 import soundfile
 
 import line_packet
-from whisper_online import (FasterWhisperASR, OnlineASRProcessor,
-                            add_shared_args)
+from whisper_online import (SAMPLING_RATE, FasterWhisperASR,
+                            OnlineASRProcessor, add_shared_args)
+
+LOG_LEVEL = logging.INFO
+PACKET_SIZE = 65536
 
 parser = argparse.ArgumentParser()
 
@@ -27,8 +30,6 @@ args = parser.parse_args()
 
 
 # setting whisper object by args
-
-SAMPLING_RATE = 16000
 
 size = args.model
 language = args.lan
@@ -77,8 +78,6 @@ online = OnlineASRProcessor(
 class Connection:
     """it wraps conn object"""
 
-    PACKET_SIZE = 65536
-
     def __init__(self, conn):
         self.conn = conn
         self.last_line = ""
@@ -97,7 +96,7 @@ class Connection:
         return in_line
 
     def non_blocking_receive_audio(self):
-        r = self.conn.recv(self.PACKET_SIZE)
+        r = self.conn.recv(PACKET_SIZE)
         return r
 
 
@@ -186,9 +185,7 @@ class ServerProcessor:
 #        self.send_result(o)
 
 
-# Start logging.
-level = logging.INFO
-logging.basicConfig(level=level, format="whisper-server-%(levelname)s: %(message)s")
+logging.basicConfig(level=LOG_LEVEL, format="whisper-server-%(levelname)s: %(message)s")
 
 # server loop
 

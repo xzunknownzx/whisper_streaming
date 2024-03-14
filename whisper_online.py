@@ -8,17 +8,21 @@ import librosa
 import numpy as np
 from faster_whisper import WhisperModel
 
+SAMPLING_RATE = 16000
+DEVICE = "cpu"
+COMPUTE_TYPE = "int8"
+
 
 @lru_cache
 def load_audio(fname):
-    a, _ = librosa.load(fname, sr=16000, dtype=np.float32)
+    a, _ = librosa.load(fname, sr=SAMPLING_RATE, dtype=np.float32)
     return a
 
 
 def load_audio_chunk(fname, beg, end):
     audio = load_audio(fname)
-    beg_s = int(beg * 16000)
-    end_s = int(end * 16000)
+    beg_s = int(beg * SAMPLING_RATE)
+    end_s = int(end * SAMPLING_RATE)
     return audio[beg_s:end_s]
 
 
@@ -71,8 +75,8 @@ class FasterWhisperASR(ASRBase):
 
         model = WhisperModel(
             model_size_or_path,
-            device="cpu",
-            compute_type="int8",
+            device=DEVICE,
+            compute_type=COMPUTE_TYPE,
             download_root=cache_dir,
         )
 
@@ -183,8 +187,6 @@ class HypothesisBuffer:
 
 
 class OnlineASRProcessor:
-    SAMPLING_RATE = 16000
-
     def __init__(
         self, asr, tokenizer=None, buffer_trimming=("segment", 15), logfile=sys.stderr
     ):
@@ -244,7 +246,7 @@ class OnlineASRProcessor:
         print("PROMPT:", prompt, file=self.logfile)
         print("CONTEXT:", non_prompt, file=self.logfile)
         print(
-            f"transcribing {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}",
+            f"transcribing {len(self.audio_buffer)/SAMPLING_RATE:2.2f} seconds from {self.buffer_time_offset:2.2f}",
             file=self.logfile,
         )
         res = self.asr.transcribe(self.audio_buffer, init_prompt=prompt)
@@ -267,7 +269,7 @@ class OnlineASRProcessor:
 
         s = self.buffer_trimming_sec  # trim the completed segments longer than s,
 
-        if len(self.audio_buffer) / self.SAMPLING_RATE > s:
+        if len(self.audio_buffer) / SAMPLING_RATE > s:
             self.chunk_completed_segment(res)
 
             # alternative: on any word
@@ -281,7 +283,7 @@ class OnlineASRProcessor:
             # self.chunk_at(t)
 
         print(
-            f"len of buffer now: {len(self.audio_buffer)/self.SAMPLING_RATE:2.2f}",
+            f"len of buffer now: {len(self.audio_buffer)/SAMPLING_RATE:2.2f}",
             file=self.logfile,
         )
         return self.to_flush(o)
@@ -311,7 +313,7 @@ class OnlineASRProcessor:
         """trims the hypothesis and audio buffer at "time" """
         self.transcript_buffer.pop_commited(time)
         cut_seconds = time - self.buffer_time_offset
-        self.audio_buffer = self.audio_buffer[int(cut_seconds * self.SAMPLING_RATE) :]
+        self.audio_buffer = self.audio_buffer[int(cut_seconds * SAMPLING_RATE) :]
         self.buffer_time_offset = time
 
     def finish(self):
@@ -390,13 +392,6 @@ def add_shared_args(parser):
         help="Transcribe or translate.",
     )
     parser.add_argument(
-        "--backend",
-        type=str,
-        default="faster-whisper",
-        choices=["faster-whisper"],
-        help="Load only this backend for Whisper processing.",
-    )
-    parser.add_argument(
         "--vad",
         action="store_true",
         default=False,
@@ -457,7 +452,6 @@ if __name__ == "__main__":
 
     audio_path = args.audio_path
 
-    SAMPLING_RATE = 16000
     duration = len(load_audio(audio_path)) / SAMPLING_RATE
     print("Audio duration is: %2.2f seconds" % duration, file=logfile)
 
