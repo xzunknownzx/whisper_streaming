@@ -40,12 +40,10 @@ def load_audio_chunk(fname, beg, end):
     return audio[beg_s:end_s]
 
 
-# Whisper backend
+class FasterWhisperASR:
+    """Uses faster-whisper library as the backend. Works much faster, appx 4-times (in offline mode). For GPU, it requires installation with a specific CUDNN version."""
 
-
-class ASRBase:
-    sep = " "  # join transcribe words with this character (" " for whisper_timestamped,
-    # "" for faster-whisper because it emits the spaces when neeeded)
+    sep = ""
 
     def __init__(
         self,
@@ -57,15 +55,6 @@ class ASRBase:
         self.language = language
 
         self.model = self.load_model(model_size, cache_dir, model_dir)
-
-    def load_model(self, model_size, cache_dir):
-        raise NotImplemented("must be implemented in the child class")
-
-
-class FasterWhisperASR(ASRBase):
-    """Uses faster-whisper library as the backend. Works much faster, appx 4-times (in offline mode). For GPU, it requires installation with a specific CUDNN version."""
-
-    sep = ""
 
     def load_model(self, model_size=None, cache_dir=None, model_dir=None):
         if model_dir is not None:
