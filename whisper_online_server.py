@@ -13,7 +13,7 @@ import line_packet
 from whisper_online import (SAMPLING_RATE, FasterWhisperASR,
                             OnlineASRProcessor, add_shared_args)
 
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG
 PACKET_SIZE = 65536
 
 parser = argparse.ArgumentParser()

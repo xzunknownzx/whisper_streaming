@@ -1,0 +1,8 @@
+version: "3"
+tasks:
+  server:
+    watch: true
+    sources:
+      - server.py
+    cmds:
+      - python server.py
