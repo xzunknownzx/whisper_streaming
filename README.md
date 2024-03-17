@@ -1,3 +1,18 @@
+Would like to get a hold of you! Discord is ".john.wick", signal is "John__Wick.01", WhatsApp is +1-216-314-5022 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # whisper_streaming
 Whisper realtime streaming for long speech-to-text transcription and translation
 
