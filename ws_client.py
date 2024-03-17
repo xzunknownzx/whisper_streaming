@@ -69,13 +69,19 @@ def copy_to_clipboard(text: str) -> None:
     # TODO: handle the case when the process fails
 
 
-def send_desktop_notification(message: str) -> None:
-    _ = subprocess.Popen(["notify-desktop", message])
+def send_desktop_notification(title: str, description: str | None = None) -> None:
+    if description is None:
+        cmd = ["notify-desktop", title]
+    else:
+        cmd = ["notify-desktop", title, description]
+    _ = subprocess.Popen(cmd)
     # NOTE: should the process be explicitly killed here?
     logger.info("Sent desktop notification")
 
 
-def handle_transcription(transcription_data: TranscriptionData):
+def handle_transcription(transcription_data: TranscriptionData) -> None:
+    if len(transcription_data.transcription) == 0:
+        return
     copy_to_clipboard(transcription_data.transcription)
     if transcription_data.is_complete:
         send_desktop_notification(transcription_data.transcription)
@@ -98,7 +104,7 @@ async def main():
             async def on_interrupt():
                 logger.info("Received SIGINT")
                 producer_task.cancel()
-                # await producer_task  # NOTE: doing this for some reason makes all the code below unreacheble
+                await producer_task  # NOTE: doing this for some reason makes all the code below unreacheble
                 # HACK: using sleep instead
                 await asyncio.sleep(0.5)
 
