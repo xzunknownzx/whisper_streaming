@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import asyncio
+import json
 import logging
 import signal
 import subprocess
@@ -8,9 +9,8 @@ import subprocess
 import websockets
 from websockets import WebSocketClientProtocol
 
-HOST = "localhost"
-PORT = 5555
-URL = f"ws://{HOST}:{PORT}"
+from ws_shared import URL, TranscriptionData
+
 LOG_LEVEL = logging.INFO
 
 
@@ -47,41 +47,70 @@ async def producer(ws: WebSocketClientProtocol):
             # Send the audio data through the WebSocket
             await ws.send(data)
             await asyncio.sleep(0.1)
+    except Exception as e:
+        if not isinstance(e, asyncio.CancelledError):
+            logger.error(
+                "Received unexpected error", exc_info=True
+            )  # NOTE: will `exc_info` print the stack trace?
     finally:
+        logger.info("Stopping the producer")
         process.kill()
+        process.wait()
+        logger.info("Killed the arecord process")
 
 
-async def consumer_cleanup(ws: WebSocketClientProtocol):
-    await ws.send("stop")
-    logger.info("Sent stop command")
-    async for message in ws:
-        logger.info(message)
-        if message == "stop":
-            break
+def copy_to_clipboard(text: str) -> None:
+    process = subprocess.Popen(
+        ["xclip", "-selection", "clipboard"], stdin=subprocess.PIPE
+    )
+    process.communicate(input=text.encode("utf-8"))
+    logger.info("Transcript copied to clipboard")
+    # NOTE: should the process be explicitly killed here?
+    # TODO: handle the case when the process fails
+
+
+def send_desktop_notification(message: str) -> None:
+    _ = subprocess.Popen(["notify-desktop", message])
+    # NOTE: should the process be explicitly killed here?
+    logger.info("Sent desktop notification")
+
+
+def handle_transcription(transcription_data: TranscriptionData):
+    copy_to_clipboard(transcription_data.transcription)
+    if transcription_data.is_complete:
+        send_desktop_notification(transcription_data.transcription)
 
 
 async def consumer(ws: WebSocketClientProtocol):
-    try:
-        async for message in ws:
-            logger.info(message)
-    except asyncio.CancelledError:
-        logger.info("Received KeyboardInterrupt, waiting for a full transcript")
-        try:
-            async with asyncio.timeout(10):
-                await consumer_cleanup(ws)
-        except asyncio.TimeoutError:
-            logger.error("Did not receive a final transcript in time")
-        await ws.close()
+    async for message in ws:
+        logger.info(message)
+        transcription_data = TranscriptionData(**json.loads(message))
+        handle_transcription(transcription_data)
 
 
 async def main():
-    loop = asyncio.get_running_loop()
-    loop.add_signal_handler(signal.SIGINT, loop.stop)
-
     async with websockets.connect(URL) as ws:
+        loop = asyncio.get_running_loop()
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(producer(ws))
+            producer_task = tg.create_task(producer(ws))
             tg.create_task(consumer(ws))
+
+            async def on_interrupt():
+                logger.info("Received SIGINT")
+                producer_task.cancel()
+                # await producer_task  # NOTE: doing this for some reason makes all the code below unreacheble
+                # HACK: using sleep instead
+                await asyncio.sleep(0.5)
+
+                logger.info("Producer stopped")
+                await ws.send("stop")
+                logger.info("Sent stop command")
+
+            # overrides the default behavior of the SIGINT signal
+            loop.add_signal_handler(
+                signal.SIGINT,
+                lambda: asyncio.create_task(on_interrupt()),
+            )
 
 
 if __name__ == "__main__":

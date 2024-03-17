@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 import logging
 from enum import StrEnum
-from functools import lru_cache
-from pathlib import Path
 
-import librosa
+# import librosa
 import numpy as np
 from faster_whisper import WhisperModel
 from faster_whisper.transcribe import Segment
+
+# from functools import lru_cache
+# from pathlib import Path
+
 
 SAMPLING_RATE = 16000
 DEVICE = "cpu"
@@ -34,17 +36,17 @@ class ModelSize(StrEnum):
 TimestampedSegment = tuple[float, float, str]
 
 
-@lru_cache
-def load_audio(fname: str | Path) -> np.ndarray:
-    a, _ = librosa.load(fname, sr=SAMPLING_RATE, dtype=np.float32)
-    return a
-
-
-def load_audio_chunk(fname: str | Path, beg: float, end: float) -> np.ndarray:
-    audio = load_audio(fname)
-    beg_s = int(beg * SAMPLING_RATE)
-    end_s = int(end * SAMPLING_RATE)
-    return audio[beg_s:end_s]
+# @lru_cache
+# def load_audio(fname: str | Path) -> np.ndarray:
+#     a, _ = librosa.load(fname, sr=SAMPLING_RATE, dtype=np.float32)
+#     return a
+#
+#
+# def load_audio_chunk(fname: str | Path, beg: float, end: float) -> np.ndarray:
+#     audio = load_audio(fname)
+#     beg_s = int(beg * SAMPLING_RATE)
+#     end_s = int(end * SAMPLING_RATE)
+#     return audio[beg_s:end_s]
 
 
 class FasterWhisperASR:

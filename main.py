@@ -3,7 +3,6 @@ import logging
 import os
 import time
 
-import sounddevice as sd
 from numpy import ndarray
 from scipy.io.wavfile import write
 

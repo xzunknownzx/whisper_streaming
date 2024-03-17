@@ -5,7 +5,7 @@ logging = logging.getLogger(__name__)
 logging.setLevel(LOG_LEVEL)
 
 
-import sounddevice as sd
+# import sounddevice as sd
 from scipy.io.wavfile import write
 
 fs = 16000
